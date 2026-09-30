@@ -224,7 +224,7 @@ export const Header: React.FC<HeaderProps> = ({
 
           {/* Quick link back to Appportal */}
           <a
-            href="https://schlayer1.github.io/LandingpageSchulapps/"
+            href="https://appportalhbs.vercel.app/"
             className="text-[11px] font-bold text-slate-500 hover:text-school-primary flex items-center gap-1 shrink-0 ml-2"
             title="Zurück zum Heimbürgeschule App-Portal"
           >

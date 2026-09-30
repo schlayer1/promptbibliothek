@@ -24,6 +24,7 @@ interface HeaderProps {
   onOpenOptimizer: () => void;
   onOpenImportExport: () => void;
   onOpenApiKeyModal: () => void;
+  onOpenModularBuilder?: () => void;
   promptCount: {
     school: number;
     myPrompts: number;
@@ -38,6 +39,7 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenOptimizer,
   onOpenImportExport,
   onOpenApiKeyModal,
+  onOpenModularBuilder,
   promptCount
 }) => {
   const { currentUser, isAuthenticated, isGuest, logout, openLoginModal } = useAuth();
@@ -102,6 +104,17 @@ export const Header: React.FC<HeaderProps> = ({
             <Sparkles className="w-4 h-4 text-amber-600" />
             <span className="hidden md:inline">Prompt-Tuner</span>
           </button>
+
+          {onOpenModularBuilder && (
+            <button
+              onClick={onOpenModularBuilder}
+              className="px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold shadow-xs flex items-center gap-1.5 transition active:scale-95 cursor-pointer"
+              title="Flick-Prompt-Baukasten (8-Punkte-System)"
+            >
+              <Sparkles className="w-3.5 h-3.5 text-amber-100" />
+              <span className="hidden xl:inline">Flick-Baukasten</span>
+            </button>
+          )}
 
           <button
             onClick={onOpenImportExport}
@@ -205,7 +218,25 @@ export const Header: React.FC<HeaderProps> = ({
               </span>
             </button>
 
-            {/* TAB 4: Live-Testarea */}
+            {/* TAB 4: Flick-Katalog */}
+            <button
+              onClick={() => onTabChange('flickGuide')}
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold flex items-center gap-2 transition cursor-pointer ${
+                currentTab === 'flickGuide'
+                  ? 'bg-amber-600 text-white shadow-soft'
+                  : 'bg-amber-50/80 text-amber-900 hover:bg-amber-100 border border-amber-300'
+              }`}
+            >
+              <BookOpen className="w-3.5 h-3.5" />
+              <span>📘 Flick-Katalog</span>
+              <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-black ${
+                currentTab === 'flickGuide' ? 'bg-white/20 text-white' : 'bg-amber-200 text-amber-900'
+              }`}>
+                200+
+              </span>
+            </button>
+
+            {/* TAB 5: Live-Testarea */}
             <button
               onClick={() => onTabChange('testarea')}
               className={`px-3.5 py-1.5 rounded-xl text-xs font-bold flex items-center gap-2 transition cursor-pointer ${

@@ -6,6 +6,8 @@ import { PromptEditorModal } from './components/library/PromptEditorModal';
 import { ImportExportModal } from './components/library/ImportExportModal';
 import { LiveTestarea } from './components/playground/LiveTestarea';
 import { PromptOptimizerModal } from './components/playground/PromptOptimizerModal';
+import { FlickGuideBrowser } from './components/flick/FlickGuideBrowser';
+import { FlickModularBuilderModal } from './components/flick/FlickModularBuilderModal';
 import { ApiKeyModal } from './components/ApiKeyModal';
 import { PinLoginModal } from './components/auth/PinLoginModal';
 import { Toast, ToastProps } from './components/common/Toast';
@@ -52,6 +54,7 @@ export const AppContent: React.FC = () => {
   const [editingPrompt, setEditingPrompt] = useState<PromptTemplate | null>(null);
   const [isEditorOpen, setIsEditorOpen] = useState<boolean>(false);
   const [isOptimizerOpen, setIsOptimizerOpen] = useState<boolean>(false);
+  const [isModularBuilderOpen, setIsModularBuilderOpen] = useState<boolean>(false);
   const [isImportExportOpen, setIsImportExportOpen] = useState<boolean>(false);
   const [isApiKeyOpen, setIsApiKeyOpen] = useState<boolean>(false);
 
@@ -271,6 +274,7 @@ export const AppContent: React.FC = () => {
         onOpenOptimizer={() => setIsOptimizerOpen(true)}
         onOpenImportExport={() => setIsImportExportOpen(true)}
         onOpenApiKeyModal={() => setIsApiKeyOpen(true)}
+        onOpenModularBuilder={() => setIsModularBuilderOpen(true)}
         promptCount={counts}
       />
 
@@ -283,6 +287,12 @@ export const AppContent: React.FC = () => {
             promptsList={prompts}
             onSaveAsPrompt={handleSaveFromTestarea}
             onShowToast={showToast}
+          />
+        ) : filterOptions.tab === 'flickGuide' ? (
+          <FlickGuideBrowser
+            onRunInTestarea={handleRunInTestarea}
+            onAdoptAsTemplate={(text, title) => handleSaveFromTestarea(text, title)}
+            onOpenModularBuilder={() => setIsModularBuilderOpen(true)}
           />
         ) : (
           <PromptGrid
@@ -367,6 +377,13 @@ export const AppContent: React.FC = () => {
           handleRunInTestarea(text, title);
         }}
         onShowToast={showToast}
+      />
+
+      <FlickModularBuilderModal
+        isOpen={isModularBuilderOpen}
+        onClose={() => setIsModularBuilderOpen(false)}
+        onRunInTestarea={handleRunInTestarea}
+        onSaveAsTemplate={(text, title) => handleSaveFromTestarea(text, title)}
       />
 
       <ImportExportModal

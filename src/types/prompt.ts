@@ -59,5 +59,5 @@ export interface FilterOptions {
   subject: string;
   grade: string;
   afb: string;
-  tab: 'school' | 'my-prompts' | 'favorites' | 'testarea';
+  tab: 'school' | 'my-prompts' | 'favorites' | 'testarea' | 'flickGuide';
 }

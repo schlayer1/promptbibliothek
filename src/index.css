@@ -38,3 +38,70 @@
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
   background: #94a3b8;
 }
+
+/* ==========================================================================
+   PRINT OPTIMIZATIONS FOR CRISP DIN A4 WORKSHEETS, CARDS & PARENT LETTERS
+   ========================================================================== */
+@media print {
+  @page {
+    margin: 1.2cm 1.4cm;
+    size: A4 portrait;
+  }
+
+  html, body {
+    background: #ffffff !important;
+    color: #000000 !important;
+    font-size: 11pt !important;
+    line-height: 1.45 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 100% !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Hide complete web application shell */
+  header, nav, footer, .print\:hidden, .no-print, [role="dialog"], button {
+    display: none !important;
+  }
+
+  /* Make the printable container take full page width without outer wrappers */
+  #root {
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  main {
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  #printable-schueler-output {
+    display: block !important;
+    position: static !important;
+    width: 100% !important;
+    max-width: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: none !important;
+    box-shadow: none !important;
+    background: #ffffff !important;
+  }
+
+  /* Prevent awkward page breaks inside cards, tables and question blocks */
+  .break-inside-avoid, .print-avoid-break {
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+  }
+
+  /* Clean forced page breaks */
+  .page-break-after {
+    break-after: page !important;
+    page-break-after: always !important;
+  }
+
+  /* High-contrast borders for photocopiers */
+  .print-border-solid {
+    border-color: #334155 !important;
+  }
+}

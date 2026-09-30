@@ -317,7 +317,7 @@ export const AppContent: React.FC = () => {
 
       {/* FOOTER */}
       <footer className="bg-white border-t border-slate-200 py-6 px-4 text-center text-xs text-slate-500">
-        <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3">
+        <div className="w-full max-w-[2100px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-10 2xl:px-12 flex flex-col sm:flex-row items-center justify-between gap-3">
           <p>
             Staatliche Regelschule Heimbürgeschule Kahla &bull; KI-Promptbibliothek für das Kollegium
           </p>

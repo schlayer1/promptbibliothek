@@ -58,7 +58,7 @@ export const Header: React.FC<HeaderProps> = ({
   return (
     <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200/80 shadow-soft">
       {/* TOP BAR */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 flex items-center justify-between gap-4">
+      <div className="w-full max-w-[2100px] mx-auto px-3 sm:px-6 lg:px-8 xl:px-10 2xl:px-12 py-2.5 sm:py-3 flex items-center justify-between gap-3 sm:gap-4">
         {/* School Brand */}
         <div className="flex items-center gap-3.5">
           <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-2xl bg-gradient-to-tr from-school-primary to-school-primaryContainer text-white flex items-center justify-center shadow-soft shrink-0">
@@ -161,9 +161,9 @@ export const Header: React.FC<HeaderProps> = ({
       </div>
 
       {/* NAVIGATION TABS BAR */}
-      <div className="bg-school-surface border-t border-slate-200/60 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-7xl mx-auto flex items-center justify-between overflow-x-auto py-2 gap-2">
-          <nav className="flex items-center gap-1.5 sm:gap-2">
+      <div className="bg-school-surface border-t border-slate-200/60 px-3 sm:px-6 lg:px-8 xl:px-10 2xl:px-12">
+        <div className="w-full max-w-[2100px] mx-auto flex items-center justify-between overflow-x-auto py-2 gap-2 touch-pan-x scrollbar-none">
+          <nav className="flex items-center gap-1.5 sm:gap-2 shrink-0">
             {/* TAB 1: Kollegium */}
             <button
               onClick={() => onTabChange('school')}

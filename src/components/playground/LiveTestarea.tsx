@@ -199,16 +199,16 @@ export const LiveTestarea: React.FC<LiveTestareaProps> = ({
   const detectedFormat = outputResult ? detectPedagogicalFormat(outputResult.text) : 'arbeitsblatt';
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+    <div className="w-full max-w-[2100px] mx-auto px-3 sm:px-6 lg:px-8 xl:px-10 2xl:px-12 py-5 sm:py-6 space-y-5 sm:space-y-6">
       
       {/* HEADER BANNER (Hidden on print) */}
-      <div className="bg-gradient-to-r from-emerald-600 via-teal-600 to-school-primary p-6 sm:p-8 rounded-3xl text-white shadow-float flex flex-col md:flex-row items-start md:items-center justify-between gap-6 print:hidden">
+      <div className="bg-gradient-to-r from-emerald-600 via-teal-600 to-school-primary p-5 sm:p-8 rounded-3xl text-white shadow-float flex flex-col md:flex-row items-start md:items-center justify-between gap-5 sm:gap-6 print:hidden">
         <div>
           <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/20 text-xs font-bold mb-2.5">
             <FlaskConical className="w-3.5 h-3.5 text-emerald-200" />
             <span>Integrierte Schul-Testarea</span>
           </div>
-          <h2 className="text-2xl sm:text-3xl font-black tracking-tight leading-tight">
+          <h2 className="text-xl sm:text-2xl lg:text-3xl font-black tracking-tight leading-tight">
             Live-Labor & Schülerhände-Ready Studio
           </h2>
           <p className="text-xs sm:text-sm text-emerald-100 mt-1.5 max-w-2xl leading-relaxed">
@@ -237,11 +237,11 @@ export const LiveTestarea: React.FC<LiveTestareaProps> = ({
       </div>
 
       {/* TWO-COLUMN OR EXPANDED WORKBENCH */}
-      <div className={`grid gap-6 items-start ${isFullWidthPreview ? 'grid-cols-1' : 'grid-cols-1 lg:grid-cols-2'}`}>
+      <div className={`grid gap-6 items-start ${isFullWidthPreview ? 'grid-cols-1' : 'grid-cols-1 lg:grid-cols-12'}`}>
         
         {/* LEFT COLUMN: PROMPT COMPOSER (Hidden if full width preview or print) */}
         {!isFullWidthPreview && (
-          <div className="bg-white rounded-3xl border border-slate-200 shadow-soft p-5 sm:p-6 space-y-4 print:hidden">
+          <div className="bg-white rounded-3xl border border-slate-200 shadow-soft p-4 sm:p-6 space-y-4 print:hidden lg:col-span-6 xl:col-span-5 2xl:col-span-5">
             
             <div className="flex items-center justify-between">
               <h3 className="font-extrabold text-sm text-slate-800 flex items-center gap-2">
@@ -352,7 +352,7 @@ export const LiveTestarea: React.FC<LiveTestareaProps> = ({
         )}
 
         {/* RIGHT COLUMN: DIDACTIC SCHÜLERHÄNDE-READY WORKBENCH */}
-        <div className={`space-y-4 ${isFullWidthPreview ? 'w-full' : ''}`}>
+        <div className={`space-y-4 ${isFullWidthPreview ? 'w-full' : 'lg:col-span-6 xl:col-span-7 2xl:col-span-7'}`}>
           
           {/* TOOLBAR FOR SCHÜLERHÄNDE OUTPUT (Print: hidden) */}
           {outputResult && (

@@ -76,10 +76,10 @@ export const PromptGrid: React.FC<PromptGridProps> = ({
   };
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+    <div className="w-full max-w-[2100px] mx-auto px-3 sm:px-6 lg:px-8 xl:px-10 2xl:px-12 py-5 sm:py-6 space-y-5 sm:space-y-6">
       
       {/* CATEGORY SELECTOR CAROUSEL */}
-      <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
+      <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none touch-pan-x">
         {categories.map(cat => {
           const Icon = cat.icon;
           const isActive = filterOptions.category === cat.key;
@@ -124,7 +124,7 @@ export const PromptGrid: React.FC<PromptGridProps> = ({
         </div>
 
         {/* Secondary Dropdown Filters */}
-        <div className="flex items-center gap-2 overflow-x-auto">
+        <div className="flex flex-wrap sm:flex-nowrap items-center gap-2 overflow-x-auto scrollbar-none touch-pan-x">
           {/* Subject Filter */}
           <select
             value={filterOptions.subject}
@@ -175,7 +175,7 @@ export const PromptGrid: React.FC<PromptGridProps> = ({
 
       {/* PROMPTS GRID */}
       {prompts.length > 0 ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4 sm:gap-5">
           {prompts.map(p => (
             <PromptCard
               key={p.id}

@@ -6,13 +6,14 @@ import {
   getDocs, 
   setDoc, 
   deleteDoc, 
+  onSnapshot,
   query, 
   orderBy, 
   Firestore,
   updateDoc,
   arrayUnion
 } from 'firebase/firestore';
-import { PortalUser } from '../types/user';
+import { formatTeacherName, PortalUser, TeacherGender } from '../types/user';
 import { PromptTemplate, ColleagueTip } from '../types/prompt';
 import { FLICK_STARTER_PROMPTS } from '../data/flickStarterPrompts';
 
@@ -70,13 +71,200 @@ export const INITIAL_SEED_TEACHERS: PortalUser[] = [
   { id: "t-wesely", name: "Wesely", pin: "7484", role: "teacher", active: true, createdAt: Date.now() }
 ];
 
+export const STATISTIK_FIREBASE_CONFIG = {
+  apiKey: "AIzaSyCnleowgQT4XoMK5P5b_t1uWYGsWoYxT80",
+  authDomain: "statistik-91f25.firebaseapp.com",
+  projectId: "statistik-91f25",
+  storageBucket: "statistik-91f25.firebasestorage.app",
+  messagingSenderId: "277742289737",
+  appId: "1:277742289737:web:b87043732524cc283d5098"
+};
+
+const TEACHERS_CACHE_KEY = 'hbs_promptbibliothek_teachers_cache_v1';
+
 export let db: Firestore | null = null;
+export let statistikDb: Firestore | null = null;
 
 try {
   const app = getApps().length === 0 ? initializeApp(DEFAULT_FIREBASE_CONFIG) : getApp();
   db = getFirestore(app);
 } catch (err) {
   console.warn("[Firebase] Init-Warnung (Offline Cache aktiv):", err);
+}
+
+try {
+  const existingStat = getApps().find(a => a.name === 'hbs-statistik-source');
+  const statApp = existingStat || initializeApp(STATISTIK_FIREBASE_CONFIG, 'hbs-statistik-source');
+  statistikDb = getFirestore(statApp);
+} catch (err) {
+  console.warn("[Firebase] Statistik-Init-Warnung:", err);
+}
+
+interface StatistikTeacherRaw {
+  id?: string;
+  name?: string;
+  pin?: string;
+  gender?: string;
+  active?: boolean;
+}
+
+const normalizeGender = (val: unknown): TeacherGender => {
+  if (val === 'f' || val === 'm' || val === 'd') return val;
+  return '';
+};
+
+export function getCachedTeachers(): PortalUser[] {
+  if (typeof window === 'undefined') return INITIAL_SEED_TEACHERS;
+  try {
+    const raw = localStorage.getItem(TEACHERS_CACHE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    }
+  } catch {}
+  return INITIAL_SEED_TEACHERS;
+}
+
+function setCachedTeachers(teachers: PortalUser[]) {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(TEACHERS_CACHE_KEY, JSON.stringify(teachers));
+  } catch {}
+}
+
+function mergeTeachers(baseUsers: PortalUser[], statistikList: StatistikTeacherRaw[]): PortalUser[] {
+  const merged = baseUsers.map(u => ({ ...u }));
+  statistikList.forEach(st => {
+    const rawName = (st?.name || '').trim();
+    if (!rawName || rawName.toLowerCase().includes('schulleitung')) return;
+
+    const stId = st.id ? String(st.id).trim() : '';
+    const cleanLower = rawName.toLowerCase();
+    const idx = merged.findIndex(
+      u =>
+        (stId && (u.sourceTeacherId === stId || u.id === `t-${stId}` || u.id === stId)) ||
+        u.name.trim().toLowerCase() === cleanLower
+    );
+
+    const rawPin = st.pin !== undefined && st.pin !== null ? String(st.pin).trim() : '';
+    const validPin = /^\d{4,}$/.test(rawPin) ? rawPin : '';
+    const hasGenderField = st.gender !== undefined && st.gender !== null;
+    const incomingGender = normalizeGender(st.gender);
+    const incomingActive = st.active !== false;
+
+    if (idx >= 0) {
+      const target = merged[idx];
+      if (validPin) target.pin = validPin;
+      if (hasGenderField) target.gender = incomingGender;
+      target.name = rawName;
+      target.active = incomingActive;
+      if (stId) target.sourceTeacherId = stId;
+    } else if (validPin) {
+      merged.push({
+        id: stId ? `t-${stId}` : `t-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+        sourceTeacherId: stId || undefined,
+        name: rawName,
+        gender: incomingGender,
+        pin: validPin,
+        role: 'teacher',
+        active: incomingActive,
+        createdAt: Date.now()
+      });
+    }
+  });
+  return merged;
+}
+
+async function fetchStatistikViaRest(): Promise<StatistikTeacherRaw[]> {
+  try {
+    const res = await fetch(
+      'https://firestore.googleapis.com/v1/projects/statistik-91f25/databases/(default)/documents/schools/HBS'
+    );
+    if (!res.ok) return [];
+    const docJson = await res.json();
+    const values = docJson?.fields?.teachers?.arrayValue?.values;
+    if (!Array.isArray(values)) return [];
+    return values.map((v: any) => {
+      const f = v?.mapValue?.fields || {};
+      return {
+        id: f.id?.stringValue ?? '',
+        name: f.name?.stringValue ?? '',
+        pin: f.pin?.stringValue ?? '',
+        gender: f.gender?.stringValue ?? '',
+        active: f.active?.booleanValue !== undefined ? Boolean(f.active.booleanValue) : true
+      };
+    });
+  } catch {
+    return [];
+  }
+}
+
+export function subscribeToSyncedTeachers(callback: (teachers: PortalUser[]) => void): {
+  refresh: () => Promise<void>;
+  unsubscribe: () => void;
+} {
+  let latestBase: PortalUser[] = getCachedTeachers();
+  let latestStatistik: StatistikTeacherRaw[] = [];
+  let unsubPortal: (() => void) | null = null;
+  let unsubStatistik: (() => void) | null = null;
+
+  const emitMerged = () => {
+    const next = mergeTeachers(latestBase, latestStatistik);
+    setCachedTeachers(next);
+    callback(next);
+  };
+
+  const refresh = async () => {
+    const statList = await fetchStatistikViaRest();
+    if (statList.length > 0) {
+      latestStatistik = statList;
+      emitMerged();
+    }
+  };
+
+  if (db) {
+    try {
+      const portalRef = doc(db, "hbs_appportal", "portal_data");
+      unsubPortal = onSnapshot(portalRef, (snap) => {
+        if (snap.exists()) {
+          const data = snap.data();
+          if (Array.isArray(data?.users) && data.users.length > 0) {
+            latestBase = data.users;
+            emitMerged();
+          }
+        }
+      }, () => {});
+    } catch {}
+  }
+
+  if (statistikDb) {
+    try {
+      const statRef = doc(statistikDb, "schools", "HBS");
+      unsubStatistik = onSnapshot(statRef, (snap) => {
+        if (snap.exists()) {
+          const data = snap.data();
+          if (Array.isArray(data?.teachers)) {
+            latestStatistik = data.teachers;
+            emitMerged();
+          }
+        }
+      }, () => {
+        refresh();
+      });
+    } catch {
+      refresh();
+    }
+  } else {
+    refresh();
+  }
+
+  return {
+    refresh,
+    unsubscribe: () => {
+      if (unsubPortal) unsubPortal();
+      if (unsubStatistik) unsubStatistik();
+    }
+  };
 }
 
 // --- AUTHENTIFIZIERUNG ---
@@ -91,10 +279,16 @@ export function getCachedCurrentUser(): PortalUser | null {
   }
 }
 
-export function loginWithPin(userId: string, pin: string): { success: boolean; user?: PortalUser; error?: string } {
+export function loginWithPin(
+  userId: string,
+  pin: string,
+  availableTeachers?: PortalUser[]
+): { success: boolean; user?: PortalUser; error?: string } {
+  const list = availableTeachers && availableTeachers.length > 0 ? availableTeachers : getCachedTeachers();
+
   // 1. Admin Master-PIN
   if (pin === MASTER_ADMIN_PIN) {
-    const target = INITIAL_SEED_TEACHERS.find(t => t.id === userId) || {
+    const target = list.find(t => t.id === userId) || {
       id: "admin-master",
       name: "Schulleitung / Admin",
       pin: MASTER_ADMIN_PIN,
@@ -108,7 +302,7 @@ export function loginWithPin(userId: string, pin: string): { success: boolean; u
   }
 
   // 2. Lehrer-PIN prüfen
-  const teacher = INITIAL_SEED_TEACHERS.find(t => t.id === userId);
+  const teacher = list.find(t => t.id === userId && t.active !== false);
   if (!teacher) {
     return { success: false, error: "Lehrkraft nicht gefunden." };
   }
@@ -253,7 +447,7 @@ export async function forkPromptToUser(prompt: PromptTemplate, user: PortalUser)
     id: newId,
     title: `${prompt.title} (Meine Version)`,
     authorId: user.id,
-    authorName: user.name,
+    authorName: formatTeacherName(user),
     visibility: 'private',
     forkedFromId: prompt.id,
     favoriteCount: 0,
@@ -269,7 +463,7 @@ export async function addColleagueTipToPrompt(promptId: string, tipText: string,
   const newTip: ColleagueTip = {
     id: `tip_${Date.now()}`,
     authorId: user.id,
-    authorName: user.name,
+    authorName: formatTeacherName(user),
     text: tipText.trim(),
     createdAt: Date.now()
   };

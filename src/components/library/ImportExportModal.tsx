@@ -13,6 +13,7 @@ import {
 import { PromptTemplate } from '../../types/prompt';
 import { parseMarkdownPrompts, exportPromptsToJson, exportPromptsToMarkdown } from '../../services/notionImporter';
 import { useAuth } from '../../context/AuthContext';
+import { formatTeacherName } from '../../types/user';
 
 interface ImportExportModalProps {
   isOpen: boolean;
@@ -47,7 +48,7 @@ export const ImportExportModal: React.FC<ImportExportModalProps> = ({
       const parsed = parseMarkdownPrompts(
         importText, 
         currentUser?.id || 'import', 
-        currentUser?.name || 'Importierte Vorlage'
+        currentUser ? formatTeacherName(currentUser) : 'Importierte Vorlage'
       );
 
       if (parsed.length === 0) {

@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { PromptTemplate, PromptCategory } from '../../types/prompt';
 import { useAuth } from '../../context/AuthContext';
+import { formatTeacherName } from '../../types/user';
 import { THUERINGEN_SUBJECTS, GRADE_LEVELS, CATEGORY_LABELS } from '../../data/schoolSubjects';
 import { extractVariablesFromText } from '../../services/notionImporter';
 
@@ -76,7 +77,7 @@ export const PromptEditorModal: React.FC<PromptEditorModalProps> = ({
       variables: detectedVariables,
       visibility,
       authorId: initialPrompt?.authorId || currentUser?.id || 'gast',
-      authorName: initialPrompt?.authorName || currentUser?.name || 'Lehrkraft',
+      authorName: initialPrompt?.authorName || (currentUser ? formatTeacherName(currentUser) : 'Lehrkraft'),
       source: initialPrompt?.source || (visibility === 'school' ? 'Kollegium HBS' : 'Mein Entwurf'),
       recommendedModel,
       favoriteCount: initialPrompt?.favoriteCount || 0,

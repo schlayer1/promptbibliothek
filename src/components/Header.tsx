@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { FilterOptions } from '../types/prompt';
+import { formatTeacherName } from '../types/user';
 
 interface HeaderProps {
   currentTab: FilterOptions['tab'];
@@ -138,7 +139,7 @@ export const Header: React.FC<HeaderProps> = ({
             <div className="flex items-center gap-1.5 pl-2 border-l border-slate-200">
               <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-school-surfaceContainer text-xs font-bold text-school-textMain border border-school-primary/20">
                 <User className="w-3.5 h-3.5 text-school-primary" />
-                <span className="max-w-[100px] truncate">{currentUser?.name}</span>
+                <span className="max-w-[100px] truncate">{currentUser ? formatTeacherName(currentUser) : ''}</span>
               </div>
               <button
                 onClick={logout}

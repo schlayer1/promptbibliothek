@@ -12,6 +12,7 @@ import { ApiKeyModal } from './components/ApiKeyModal';
 import { PinLoginModal } from './components/auth/PinLoginModal';
 import { Toast, ToastProps } from './components/common/Toast';
 import { useAuth } from './context/AuthContext';
+import { formatTeacherName } from './types/user';
 import { 
   PromptTemplate, 
   FilterOptions 
@@ -248,7 +249,7 @@ export const AppContent: React.FC = () => {
       variables: [],
       visibility: 'private',
       authorId: currentUser?.id || 'gast',
-      authorName: currentUser?.name || 'Lehrkraft',
+      authorName: currentUser ? formatTeacherName(currentUser) : 'Lehrkraft',
       favoriteCount: 0,
       createdAt: Date.now(),
       updatedAt: Date.now()
@@ -366,7 +367,7 @@ export const AppContent: React.FC = () => {
             variables: [],
             visibility: 'private',
             authorId: currentUser?.id || 'gast',
-            authorName: currentUser?.name || 'Lehrkraft',
+            authorName: currentUser ? formatTeacherName(currentUser) : 'Lehrkraft',
             favoriteCount: 0,
             createdAt: Date.now(),
             updatedAt: Date.now()

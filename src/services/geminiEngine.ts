@@ -1,26 +1,5 @@
-// Zukunftssichere Google Gemini Anbindung nach HBS-Schulstandard
-// Mit dynamischer Kaskade, automatischer Ausfall-Kette und Ausschluss eingestellter Modelle
+// Zukunftssichere Google Gemini Anbindung nach HBS-Schulstandard (/api/gemini Proxy)
 
-const decodeDefaultKey = (): string => {
-  try {
-    const b64 = 'QVEuQWI4Uk42SUpRQTM1V0ZScTRfLTdsUFAxQVU1Y1l5bkVTN3VmekZjdjlyZktHMjhhV2c=';
-    if (typeof window !== 'undefined' && typeof window.atob !== 'undefined') {
-      return window.atob(b64);
-    }
-    if (typeof atob !== 'undefined') {
-      return atob(b64);
-    }
-    const buf = (globalThis as any).Buffer;
-    if (buf) {
-      return buf.from(b64, 'base64').toString('utf8');
-    }
-  } catch {}
-  return '';
-};
-
-export const DEFAULT_SCHOOL_GEMINI_KEY = decodeDefaultKey();
-
-// Bekannte zukunftssichere Free-Tier Flash-/Hydrogen-Modelle in bevorzugter Prioritätsreihenfolge
 export const CANDIDATE_FLASH_MODELS = [
   'gemini-4-hydrogen',
   'gemini-flash-lite-latest',
@@ -30,99 +9,25 @@ export const CANDIDATE_FLASH_MODELS = [
   'gemini-flash-latest',
 ];
 
-// Explizit eingestellte, abgeschaltete oder kostenpflichtige Modelle
-const SUNSET_OR_DISCONTINUED_PATTERNS = [
-  'argon',
-  'carbon',
-  '2.5-',
-  '1.5-',
-  '1.0-',
-  '2.0-',
-  '3.7-flash',
-  '3-flash-preview',
-  '3.1-flash-lite',
-  '3-pro-preview',
-  '3.1-pro',
-  'pro-latest',
-  'omni',
-  'live',
-  'nano-banana',
-  'deep-research',
-  'antigravity',
-  '8b',
-  'embedding',
-  'aqa',
-  'tts',
-  'image',
-  'native-audio',
-  'transcribe',
-  'computer-use',
-  'robotics',
-  'veo',
-  'lyria',
-];
-
 let cachedWorkingModel: string | null = 'gemini-4-hydrogen';
-let cachedDiscoveredModels: string[] = [];
 
 /**
- * Ermittelt live alle aktiven Free-Tier Textmodelle direkt über die Google API
+ * Liefert die verifizierte Modellliste ohne zusätzlichen Vorab-API-Roundtrip.
  */
-export async function discoverAvailableGeminiModels(apiKey: string): Promise<string[]> {
-  if (cachedDiscoveredModels.length > 0) {
-    return cachedDiscoveredModels;
-  }
-
-  try {
-    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`);
-    if (res.ok) {
-      const data = await res.json();
-      const rawModels: any[] = data.models || [];
-
-      const supported = rawModels
-        .filter((m: any) => {
-          const shortName = (m.name || '').replace(/^models\//, '').toLowerCase();
-          const methods = m.supportedGenerationMethods || [];
-          if (!methods.includes('generateContent')) return false;
-          if (!shortName.includes('hydrogen') && !shortName.includes('flash')) return false;
-          if (shortName === 'gemini-3.5-flash') return false;
-
-          for (const pattern of SUNSET_OR_DISCONTINUED_PATTERNS) {
-            if (shortName.includes(pattern)) return false;
-          }
-          return true;
-        })
-        .map((m: any) => (m.name || '').replace(/^models\//, ''))
-        .sort((a: string, b: string) => {
-          const ia = CANDIDATE_FLASH_MODELS.indexOf(a);
-          const ib = CANDIDATE_FLASH_MODELS.indexOf(b);
-          if (ia !== -1 && ib !== -1) return ia - ib;
-          if (ia !== -1) return -1;
-          if (ib !== -1) return 1;
-          return 0;
-        });
-
-      if (supported.length > 0) {
-        cachedDiscoveredModels = supported;
-        return supported;
-      }
-    }
-  } catch (err) {
-    console.warn('[GeminiEngine] Modell-Erkennung fehlgeschlagen, nutze Kandidaten:', err);
-  }
-
+export async function discoverAvailableGeminiModels(): Promise<string[]> {
   return CANDIDATE_FLASH_MODELS;
 }
 
 /**
- * Ruft Gemini mit automatischer Kaskadierung über funktionierende Modelle auf
+ * Ruft Gemini primär über den sicheren Serverless-Proxy (/api/gemini) auf.
+ * Direktaufruf erfolgt nur als Fallback bei 404 (statisches Hosting) und vorhandenem BYOK-Key.
  */
 export async function callGeminiApi({
   apiKey,
   systemPrompt,
   userPrompt,
   model,
-  temperature = 0.4
+  temperature = 0.4,
 }: {
   apiKey?: string;
   systemPrompt?: string;
@@ -130,34 +35,58 @@ export async function callGeminiApi({
   model?: string;
   temperature?: number;
 }): Promise<{ text: string; modelUsed: string }> {
-  const activeKey = apiKey?.trim() || DEFAULT_SCHOOL_GEMINI_KEY;
-  if (!activeKey) {
-    throw new Error('Kein Gemini API-Schlüssel verfügbar.');
-  }
+  const customKey = apiKey?.trim() && apiKey.trim() !== 'serverless-proxy' ? apiKey.trim() : '';
+  const requestedModel =
+    model && model !== 'auto' ? model : cachedWorkingModel || 'auto';
 
-  // Modell-Kandidaten-Kette aufbauen
-  const candidateModels: string[] = [];
+  // 1. Primärer Pfad: Sicherer Serverless Proxy (/api/gemini)
+  try {
+    const proxyResponse = await fetch('/api/gemini', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        apiKey: customKey || 'serverless-proxy',
+        systemPrompt,
+        userPrompt,
+        model: requestedModel,
+        temperature,
+      }),
+    });
 
-  // 1. Spezifisch gewünschtes Modell
-  if (model && model !== 'auto' && !candidateModels.includes(model)) {
-    candidateModels.push(model);
-  }
+    if (proxyResponse.ok) {
+      const data = await proxyResponse.json();
+      if (data?.text) {
+        const usedModel = data.model || CANDIDATE_FLASH_MODELS[0];
+        cachedWorkingModel = usedModel;
+        return { text: data.text, modelUsed: usedModel };
+      }
+    }
 
-  // 2. Zuletzt funktionierendes Modell
-  if (cachedWorkingModel && !candidateModels.includes(cachedWorkingModel)) {
-    candidateModels.push(cachedWorkingModel);
-  }
-
-  // 3. Verifizierte Flash-Kandidaten
-  for (const m of CANDIDATE_FLASH_MODELS) {
-    if (!candidateModels.includes(m)) {
-      candidateModels.push(m);
+    if (proxyResponse.status !== 404) {
+      const errJson = await proxyResponse.json().catch(() => ({}));
+      throw new Error(errJson?.error || `HTTP ${proxyResponse.status} von /api/gemini`);
+    }
+  } catch (proxyErr: any) {
+    if (proxyErr?.message && !proxyErr.message.includes('404')) {
+      throw proxyErr;
     }
   }
 
-  // 4. Live entdeckte Modelle anhängen
-  const discovered = await discoverAvailableGeminiModels(activeKey);
-  for (const m of discovered) {
+  // 2. Fallback bei 404 nur mit persönlichem BYOK-Schlüssel
+  if (!customKey) {
+    throw new Error(
+      'Der Gemini-Server-Proxy (/api/gemini) ist nicht erreichbar und es ist kein persönlicher API-Schlüssel hinterlegt.'
+    );
+  }
+
+  const candidateModels: string[] = [];
+  if (model && model !== 'auto' && !candidateModels.includes(model)) {
+    candidateModels.push(model);
+  }
+  if (cachedWorkingModel && !candidateModels.includes(cachedWorkingModel)) {
+    candidateModels.push(cachedWorkingModel);
+  }
+  for (const m of CANDIDATE_FLASH_MODELS) {
     if (!candidateModels.includes(m)) {
       candidateModels.push(m);
     }
@@ -166,7 +95,7 @@ export async function callGeminiApi({
   let lastError: any = null;
 
   for (const currentModel of candidateModels) {
-    const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${currentModel}:generateContent?key=${activeKey}`;
+    const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(currentModel)}:generateContent?key=${encodeURIComponent(customKey)}`;
 
     try {
       const response = await fetch(endpoint, {
@@ -178,25 +107,23 @@ export async function callGeminiApi({
               role: 'user',
               parts: [
                 {
-                  text: systemPrompt ? `${systemPrompt}\n\n${userPrompt}` : userPrompt
-                }
-              ]
-            }
+                  text: systemPrompt ? `${systemPrompt}\n\n${userPrompt}` : userPrompt,
+                },
+              ],
+            },
           ],
           generationConfig: {
             temperature,
-            maxOutputTokens: 6000
-          }
-        })
+            maxOutputTokens: 6000,
+          },
+        }),
       });
 
       if (response.ok) {
         const data = await response.json();
-        const candidateResp = data.candidates?.[0];
-        const text = candidateResp?.content?.parts?.[0]?.text;
+        const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
         if (text) {
           cachedWorkingModel = currentModel;
-          console.log(`[GeminiEngine] Erfolgreich generiert mit: ${currentModel}`);
           return { text, modelUsed: currentModel };
         }
       }
@@ -205,14 +132,15 @@ export async function callGeminiApi({
       const errMsg = errJson.error?.message || `HTTP ${response.status}`;
       lastError = new Error(errMsg);
 
-      if (response.status === 400 && (errMsg.includes('API_KEY_INVALID') || errMsg.includes('key not valid'))) {
+      if (
+        response.status === 400 &&
+        (errMsg.includes('API_KEY_INVALID') || errMsg.includes('key not valid'))
+      ) {
         throw new Error('Der Gemini API-Schlüssel ist ungültig. Bitte prüfe den Schlüssel.');
       }
-
-      console.warn(`[GeminiEngine] Modell ${currentModel} fehlgeschlagen (${errMsg}), teste nächstes Modell in Kaskade...`);
     } catch (err: any) {
       lastError = err;
-      if (err.message && err.message.includes('ungültig')) {
+      if (err?.message && err.message.includes('ungültig')) {
         throw err;
       }
     }
@@ -224,7 +152,10 @@ export async function callGeminiApi({
 /**
  * Optimiert einen Prompt didaktisch mit Gemini
  */
-export async function optimizePromptWithAI(rawText: string, apiKey?: string): Promise<{
+export async function optimizePromptWithAI(
+  rawText: string,
+  apiKey?: string
+): Promise<{
   optimizedTitle: string;
   optimizedPrompt: string;
   detectedVariables: string[];
@@ -253,19 +184,18 @@ Antworte STRIKT im folgenden JSON-Format ohne Markdown-Backticks:
     apiKey,
     systemPrompt,
     userPrompt,
-    temperature: 0.2
+    temperature: 0.2,
   });
 
   try {
-    // Strip markdown json fences if any
     const cleaned = text.replace(/^```json/m, '').replace(/```$/m, '').trim();
     return JSON.parse(cleaned);
-  } catch (e) {
+  } catch {
     return {
-      optimizedTitle: "Optimierter Schul-Prompt",
+      optimizedTitle: 'Optimierter Schul-Prompt',
       optimizedPrompt: text,
-      detectedVariables: ["Thema", "Klassenstufe"],
-      tips: "Aufbau und Kriterien können vor dem Absenden noch individuell angepasst werden."
+      detectedVariables: ['Thema', 'Klassenstufe'],
+      tips: 'Aufbau und Kriterien können vor dem Absenden noch individuell angepasst werden.',
     };
   }
 }

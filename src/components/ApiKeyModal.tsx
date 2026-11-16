@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { X, Key, ShieldCheck, Eye, EyeOff, Save, Sparkles, CheckCircle2 } from 'lucide-react';
-import { DEFAULT_SCHOOL_GEMINI_KEY } from '../services/geminiEngine';
 
 interface ApiKeyModalProps {
   isOpen: boolean;
@@ -112,7 +111,7 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
             <div className="relative">
               <input
                 type={showKey ? 'text' : 'password'}
-                placeholder={DEFAULT_SCHOOL_GEMINI_KEY ? 'Schulschlüssel ist als Fallback hinterlegt' : 'AIzaSy...'}
+                placeholder="Leer lassen für sicheren Schul-Server-Key (oder eigenen AIzaSy...-Key eingeben)"
                 value={geminiKey}
                 onChange={e => setGeminiKey(e.target.value)}
                 className="w-full text-xs font-mono px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl pr-10 focus:outline-none focus:ring-2 focus:ring-school-primary focus:bg-white transition text-slate-800"

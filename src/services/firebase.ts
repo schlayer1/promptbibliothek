@@ -1,6 +1,9 @@
-import { initializeApp, getApps, getApp } from 'firebase/app';
+import { initializeApp, getApps, getApp, FirebaseApp } from 'firebase/app';
 import { 
-  getFirestore, 
+  getFirestore,
+  initializeFirestore,
+  persistentLocalCache,
+  persistentMultipleTabManager,
   collection, 
   doc, 
   getDocs, 
@@ -82,12 +85,24 @@ export const STATISTIK_FIREBASE_CONFIG = {
 
 const TEACHERS_CACHE_KEY = 'hbs_promptbibliothek_teachers_cache_v1';
 
+function createPersistentFirestore(firebaseApp: FirebaseApp): Firestore {
+  try {
+    return initializeFirestore(firebaseApp, {
+      localCache: persistentLocalCache({
+        tabManager: persistentMultipleTabManager(),
+      }),
+    });
+  } catch {
+    return getFirestore(firebaseApp);
+  }
+}
+
 export let db: Firestore | null = null;
 export let statistikDb: Firestore | null = null;
 
 try {
   const app = getApps().length === 0 ? initializeApp(DEFAULT_FIREBASE_CONFIG) : getApp();
-  db = getFirestore(app);
+  db = createPersistentFirestore(app);
 } catch (err) {
   console.warn("[Firebase] Init-Warnung (Offline Cache aktiv):", err);
 }
@@ -95,7 +110,7 @@ try {
 try {
   const existingStat = getApps().find(a => a.name === 'hbs-statistik-source');
   const statApp = existingStat || initializeApp(STATISTIK_FIREBASE_CONFIG, 'hbs-statistik-source');
-  statistikDb = getFirestore(statApp);
+  statistikDb = createPersistentFirestore(statApp);
 } catch (err) {
   console.warn("[Firebase] Statistik-Init-Warnung:", err);
 }

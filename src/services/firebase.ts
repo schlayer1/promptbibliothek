@@ -12,6 +12,7 @@ import {
   onSnapshot,
   query, 
   orderBy, 
+  limit,
   Firestore,
   updateDoc,
   arrayUnion
@@ -358,7 +359,7 @@ export async function loadPromptsFromCloud(): Promise<PromptTemplate[]> {
 
   try {
     const colRef = collection(db, PROMPTS_COLLECTION);
-    const q = query(colRef, orderBy("createdAt", "desc"));
+    const q = query(colRef, orderBy("createdAt", "desc"), limit(250));
     const snapshot = await getDocs(q);
 
     const cloudPrompts: PromptTemplate[] = [];

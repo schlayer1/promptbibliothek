@@ -49,6 +49,7 @@ export const PupilReadyRenderer: React.FC<PupilReadyRendererProps> = ({
         <HintCardsView
           rawText={rawText}
           showCutLines={showCutLines}
+          showSolutions={showSolutions}
         />
       )}
 

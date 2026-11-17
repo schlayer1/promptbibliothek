@@ -28,13 +28,13 @@ export const StationCardView: React.FC<StationCardViewProps> = ({
 
       {/* DIE STATIONEN-KARTEN */}
       <div className="space-y-6">
-        {stations.map(st => {
+        {stations.map((st, idx) => {
           const isWahl = st.type === 'Wahl';
           const isZusatz = st.type === 'Zusatz';
 
           return (
             <div 
-              key={st.stationNumber}
+              key={`${st.stationNumber}-${idx}`}
               className={`bg-white rounded-3xl border-2 transition-all p-6 sm:p-8 shadow-soft print:shadow-none print-avoid-break relative ${
                 isWahl 
                   ? 'border-amber-300' 
@@ -91,6 +91,17 @@ export const StationCardView: React.FC<StationCardViewProps> = ({
                 <FormattedText content={st.content} showWritingLines={true} />
               </div>
 
+              {/* STATIONS-MUSTERLÖSUNG (NUR WENN AKTIV) */}
+              {st.solution && showSolutions && (
+                <div className="mt-4 p-4 rounded-2xl bg-emerald-50/70 border border-emerald-300 text-xs sm:text-sm">
+                  <div className="flex items-center gap-1.5 font-black text-emerald-900 mb-1.5">
+                    <Key className="w-3.5 h-3.5 text-emerald-700" />
+                    <span>Musterlösung zu Station {st.stationNumber}</span>
+                  </div>
+                  <FormattedText content={st.solution} />
+                </div>
+              )}
+
               {/* STATION FOOTER */}
               <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-400 font-medium">
                 <span>Staatliche Regelschule Heimbürgeschule Kahla</span>
@@ -105,58 +116,60 @@ export const StationCardView: React.FC<StationCardViewProps> = ({
       </div>
 
       {/* SCHÜLER-LAUFZETTEL */}
-      <div className="bg-white rounded-3xl border-2 border-slate-300 p-6 sm:p-8 shadow-soft print-avoid-break">
-        <div className="flex items-center justify-between border-b-2 border-slate-200 pb-3 mb-4">
-          <div className="flex items-center gap-2">
-            <CheckSquare className="w-5 h-5 text-school-primary" />
-            <h3 className="font-black text-base text-slate-900">
-              Schüler-Laufzettel & Stationspass
-            </h3>
+      {(stations.length > 0 || runningSheetText) && (
+        <div className="bg-white rounded-3xl border-2 border-slate-300 p-6 sm:p-8 shadow-soft print-avoid-break">
+          <div className="flex items-center justify-between border-b-2 border-slate-200 pb-3 mb-4">
+            <div className="flex items-center gap-2">
+              <CheckSquare className="w-5 h-5 text-school-primary" />
+              <h3 className="font-black text-base text-slate-900">
+                Schüler-Laufzettel & Stationspass
+              </h3>
+            </div>
+            <span className="text-xs text-slate-500 font-bold">
+              Ins Schülerheft einkleben
+            </span>
           </div>
-          <span className="text-xs text-slate-500 font-bold">
-            Ins Schülerheft einkleben
-          </span>
-        </div>
 
-        {runningSheetText ? (
-          <FormattedText content={runningSheetText} />
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs sm:text-sm border-collapse border border-slate-300">
-              <thead>
-                <tr className="bg-slate-100 text-slate-800">
-                  <th className="border border-slate-300 p-2.5 text-left font-black w-24">Station</th>
-                  <th className="border border-slate-300 p-2.5 text-left font-black">Aufgabe / Thema</th>
-                  <th className="border border-slate-300 p-2.5 text-center font-black w-28">Erledigt [✓]</th>
-                  <th className="border border-slate-300 p-2.5 text-center font-black w-36">Selbstreflexion</th>
-                  <th className="border border-slate-300 p-2.5 text-center font-black w-28">Kürzel LK</th>
-                </tr>
-              </thead>
-              <tbody>
-                {stations.map(st => (
-                  <tr key={st.stationNumber} className="border-b border-slate-200 hover:bg-slate-50/50">
-                    <td className="border border-slate-300 p-2.5 font-bold text-school-primary">
-                      Station {st.stationNumber}
-                    </td>
-                    <td className="border border-slate-300 p-2.5 font-medium text-slate-800">
-                      {st.title} ({st.type})
-                    </td>
-                    <td className="border border-slate-300 p-2.5 text-center">
-                      <div className="w-5 h-5 border-2 border-slate-400 rounded mx-auto" />
-                    </td>
-                    <td className="border border-slate-300 p-2.5 text-center text-base">
-                      🙂 &nbsp; 😐 &nbsp; 🙁
-                    </td>
-                    <td className="border border-slate-300 p-2.5 text-center text-slate-300">
-                      ______
-                    </td>
+          {runningSheetText ? (
+            <FormattedText content={runningSheetText} />
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs sm:text-sm border-collapse border border-slate-300">
+                <thead>
+                  <tr className="bg-slate-100 text-slate-800">
+                    <th className="border border-slate-300 p-2.5 text-left font-black w-24">Station</th>
+                    <th className="border border-slate-300 p-2.5 text-left font-black">Aufgabe / Thema</th>
+                    <th className="border border-slate-300 p-2.5 text-center font-black w-28">Erledigt [✓]</th>
+                    <th className="border border-slate-300 p-2.5 text-center font-black w-36">Selbstreflexion</th>
+                    <th className="border border-slate-300 p-2.5 text-center font-black w-28">Kürzel LK</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
+                </thead>
+                <tbody>
+                  {stations.map((st, idx) => (
+                    <tr key={`row-${st.stationNumber}-${idx}`} className="border-b border-slate-200 hover:bg-slate-50/50">
+                      <td className="border border-slate-300 p-2.5 font-bold text-school-primary">
+                        Station {st.stationNumber}
+                      </td>
+                      <td className="border border-slate-300 p-2.5 font-medium text-slate-800">
+                        {st.title} ({st.type})
+                      </td>
+                      <td className="border border-slate-300 p-2.5 text-center">
+                        <div className="w-5 h-5 border-2 border-slate-400 rounded mx-auto" />
+                      </td>
+                      <td className="border border-slate-300 p-2.5 text-center text-base">
+                        🙂 &nbsp; 😐 &nbsp; 🙁
+                      </td>
+                      <td className="border border-slate-300 p-2.5 text-center text-slate-300">
+                        ______
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* LÖSUNGSSTATION (NUR WENN AKTIV) */}
       {solutionSection && showSolutions && (

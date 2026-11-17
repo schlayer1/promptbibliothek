@@ -23,7 +23,9 @@ import {
   ChevronUp,
   Maximize2,
   Minimize2,
-  Zap
+  Zap,
+  AlertTriangle,
+  ArrowRight
 } from 'lucide-react';
 import { callGeminiApi, CANDIDATE_FLASH_MODELS } from '../../services/geminiEngine';
 import { scanTextForPrivacyViolations, PrivacyScanResult } from '../../services/privacyGuard';
@@ -58,7 +60,14 @@ export const LiveTestarea: React.FC<LiveTestareaProps> = ({
   const [temperature, setTemperature] = useState<number>(0.3);
 
   const [isLoading, setIsLoading] = useState<boolean>(false);
-  const [outputResult, setOutputResult] = useState<{ text: string; modelUsed: string; durationMs: number } | null>(null);
+  const [isContinuing, setIsContinuing] = useState<boolean>(false);
+  const [outputResult, setOutputResult] = useState<{
+    text: string;
+    modelUsed: string;
+    durationMs: number;
+    finishReason?: string;
+    truncated?: boolean;
+  } | null>(null);
   const [copied, setCopied] = useState<boolean>(false);
 
   // Schülerhände-Ready Controls
@@ -121,14 +130,60 @@ export const LiveTestarea: React.FC<LiveTestareaProps> = ({
       setOutputResult({
         text: res.text,
         modelUsed: res.modelUsed,
-        durationMs: Math.round(end - start)
+        durationMs: Math.round(end - start),
+        finishReason: res.finishReason,
+        truncated: res.truncated
       });
       setViewMode('pupil-ready'); // Automatically switch to Pupil Ready on response
-      onShowToast('Erfolgreich generiert', `Antwort in ${Math.round(end - start)} ms mit ${res.modelUsed} erhalten.`, 'success');
+      if (res.truncated) {
+        onShowToast(
+          'Ausgabe wurde gekürzt',
+          `Limit erreicht (${res.finishReason}). Du kannst die Antwort mit "Nahtlos fortsetzen" vervollständigen.`,
+          'info'
+        );
+      } else {
+        onShowToast('Erfolgreich generiert', `Antwort in ${Math.round(end - start)} ms mit ${res.modelUsed} erhalten.`, 'success');
+      }
     } catch (err: any) {
       onShowToast('Ausführungsfehler', err.message || 'Verbindung zur KI fehlgeschlagen.', 'error');
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleContinueOutput = async () => {
+    if (!outputResult || isContinuing || isLoading) return;
+    setIsContinuing(true);
+    const start = performance.now();
+
+    try {
+      const apiKey = localStorage.getItem('hbs_custom_gemini_key') || undefined;
+      const tailSnippet = outputResult.text.slice(-1500);
+      const continuationPrompt = `Ursprüngliche Aufgabe:\n${promptText.trim()}\n\nBisheriger letzter Teil der Antwort (wurde genau hier unterbrochen):\n"""\n${tailSnippet}\n"""\n\nSetze den Text EXAKT an der Abbruchstelle nahtlos fort (ohne Einleitung, ohne Wiederholung bereits geschriebener Wörter) und führe alle fehlenden Abschnitte vollständig zu Ende.`;
+
+      const res = await callGeminiApi({
+        apiKey,
+        systemPrompt: systemInstruction.trim() || undefined,
+        userPrompt: continuationPrompt,
+        model: selectedModel === 'auto' ? outputResult.modelUsed : selectedModel,
+        temperature
+      });
+
+      const end = performance.now();
+      const combinedText = outputResult.text + res.text;
+
+      setOutputResult({
+        text: combinedText,
+        modelUsed: res.modelUsed,
+        durationMs: outputResult.durationMs + Math.round(end - start),
+        finishReason: res.finishReason,
+        truncated: res.truncated
+      });
+      onShowToast('Ausgabe fortgesetzt', 'Fehlender Text wurde nahtlos angefügt.', 'success');
+    } catch (err: any) {
+      onShowToast('Fortsetzen fehlgeschlagen', err.message || 'Verbindung zur KI fehlgeschlagen.', 'error');
+    } finally {
+      setIsContinuing(false);
     }
   };
 
@@ -523,6 +578,42 @@ export const LiveTestarea: React.FC<LiveTestareaProps> = ({
 
               </div>
 
+            </div>
+          )}
+
+          {/* TRUNCATION / FINISH REASON WARNING BANNER (Print: hidden) */}
+          {outputResult && (outputResult.truncated || (outputResult.finishReason && outputResult.finishReason !== 'STOP')) && (
+            <div className="bg-amber-50 border-2 border-amber-300 rounded-2xl p-4 flex flex-wrap items-center justify-between gap-3 print:hidden animate-fadeIn">
+              <div className="flex items-start gap-2.5 text-xs text-amber-950">
+                <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                <div>
+                  <strong className="block font-extrabold">
+                    {outputResult.truncated
+                      ? 'Hinweis: Die KI-Antwort wurde vorzeitig beendet (Token-Limit erreicht).'
+                      : `Hinweis: Generierung beendet mit Status "${outputResult.finishReason}".`}
+                  </strong>
+                  <span className="text-amber-800">
+                    Klicke auf „Nahtlos fortsetzen“, um den fehlenden Rest automatisch anzufügen.
+                  </span>
+                </div>
+              </div>
+              <button
+                onClick={handleContinueOutput}
+                disabled={isContinuing || isLoading}
+                className="px-3.5 py-2 bg-amber-600 hover:bg-amber-700 disabled:bg-slate-300 text-white rounded-xl text-xs font-black flex items-center gap-1.5 transition cursor-pointer shrink-0"
+              >
+                {isContinuing ? (
+                  <>
+                    <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    <span>Setze fort...</span>
+                  </>
+                ) : (
+                  <>
+                    <ArrowRight className="w-3.5 h-3.5" />
+                    <span>Nahtlos fortsetzen</span>
+                  </>
+                )}
+              </button>
             </div>
           )}
 

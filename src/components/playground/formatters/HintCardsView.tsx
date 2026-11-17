@@ -1,18 +1,20 @@
 import React from 'react';
-import { Lightbulb, Search, Puzzle, Target, Scissors, HelpCircle } from 'lucide-react';
+import { Lightbulb, Search, Puzzle, Target, Scissors, HelpCircle, Key } from 'lucide-react';
 import { parseHintCards, HintCard } from '../../../services/pedagogicalParser';
 import { FormattedText } from './FormattedText';
 
 interface HintCardsViewProps {
   rawText: string;
   showCutLines: boolean;
+  showSolutions?: boolean;
 }
 
 export const HintCardsView: React.FC<HintCardsViewProps> = ({
   rawText,
-  showCutLines
+  showCutLines,
+  showSolutions = false
 }) => {
-  const { intro, cards } = parseHintCards(rawText);
+  const { intro, cards, solutionSection } = parseHintCards(rawText);
 
   const getCardIcon = (level: number) => {
     switch (level) {
@@ -78,12 +80,12 @@ export const HintCardsView: React.FC<HintCardsViewProps> = ({
         )}
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 print:grid-cols-2 print:gap-4">
-          {cards.map(card => {
+          {cards.map((card, idx) => {
             const styles = getCardStyles(card.color);
 
             return (
               <div
-                key={card.level}
+                key={`${card.level}-${idx}`}
                 className={`rounded-3xl border-2 p-5 sm:p-6 shadow-soft print:shadow-none print-avoid-break flex flex-col justify-between relative transition-all ${styles.wrapper}`}
               >
                 {/* CARD TOP HEADER */}
@@ -121,13 +123,25 @@ export const HintCardsView: React.FC<HintCardsViewProps> = ({
                       Schneidekante
                     </span>
                   )}
-                  <span>Stufe {card.level} von 4</span>
+                    <span>Stufe {card.level} von {Math.max(4, cards.length)}</span>
+                  </div>
                 </div>
-              </div>
-            );
-          })}
+              );
+            })}
+          </div>
         </div>
-      </div>
+
+      {solutionSection && showSolutions && (
+        <div className="bg-emerald-50/70 rounded-3xl border-2 border-emerald-400 p-6 sm:p-8 shadow-soft print-avoid-break">
+          <div className="flex items-center gap-2 border-b-2 border-emerald-300 pb-3 mb-4 text-emerald-950">
+            <Key className="w-5 h-5 text-emerald-700" />
+            <h3 className="font-black text-base">
+              Musterlösung (Lehrkraft-Exemplar)
+            </h3>
+          </div>
+          <FormattedText content={solutionSection} />
+        </div>
+      )}
 
     </div>
   );

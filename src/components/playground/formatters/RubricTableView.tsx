@@ -7,35 +7,37 @@ interface RubricTableViewProps {
 }
 
 export const RubricTableView: React.FC<RubricTableViewProps> = ({ rawText }) => {
-  // Extract tables and surrounding text
+  // Extract first main table and preserve surrounding text (including any additional tables)
   const lines = rawText.split('\n');
   const tableRows: string[][] = [];
   const textBeforeTable: string[] = [];
   const textAfterTable: string[] = [];
-  let isInsideTable = false;
-  let hasTablePassed = false;
+  let isInsideFirstTable = false;
+  let hasFirstTablePassed = false;
 
   for (const line of lines) {
     const trimmed = line.trim();
-    if (trimmed.startsWith('|') && trimmed.endsWith('|')) {
-      isInsideTable = true;
+    const isTableLine = trimmed.startsWith('|') && trimmed.includes('|', 1);
+
+    if (!hasFirstTablePassed && isTableLine) {
+      isInsideFirstTable = true;
       // Skip markdown separator (|---|---|)
-      if (!/^\|[\s\-:|]+\|$/.test(trimmed)) {
-        const cells = trimmed
-          .split('|')
-          .slice(1, -1)
-          .map(c => c.trim().replace(/\*\*/g, ''));
+      if (!/^\|?[\s\-:|]+\|[\s\-:|]*$/.test(trimmed) || !trimmed.includes('-')) {
+        let normalized = trimmed;
+        if (normalized.startsWith('|')) normalized = normalized.slice(1);
+        if (normalized.endsWith('|')) normalized = normalized.slice(0, -1);
+        const cells = normalized.split('|').map(c => c.trim().replace(/\*\*/g, ''));
         tableRows.push(cells);
       }
       continue;
     }
 
-    if (isInsideTable) {
-      isInsideTable = false;
-      hasTablePassed = true;
+    if (isInsideFirstTable) {
+      isInsideFirstTable = false;
+      hasFirstTablePassed = true;
     }
 
-    if (hasTablePassed) {
+    if (hasFirstTablePassed) {
       textAfterTable.push(line);
     } else {
       textBeforeTable.push(line);
@@ -44,14 +46,16 @@ export const RubricTableView: React.FC<RubricTableViewProps> = ({ rawText }) => 
 
   const headerCells = tableRows.length > 0 ? tableRows[0] : [];
   const bodyRows = tableRows.length > 1 ? tableRows.slice(1) : [];
+  const beforeStr = textBeforeTable.join('\n').trim();
+  const afterStr = textAfterTable.join('\n').trim();
 
   return (
     <div className="space-y-6">
       
       {/* TEXT VOR DER TABELLE */}
-      {textBeforeTable.length > 0 && (
+      {beforeStr && (
         <div className="p-4 bg-white rounded-2xl border border-slate-200 shadow-soft">
-          <FormattedText content={textBeforeTable.join('\n')} />
+          <FormattedText content={beforeStr} />
         </div>
       )}
 
@@ -87,9 +91,9 @@ export const RubricTableView: React.FC<RubricTableViewProps> = ({ rawText }) => 
               <tbody>
                 {bodyRows.map((row, rIdx) => (
                   <tr key={rIdx} className={rIdx % 2 === 0 ? 'bg-white' : 'bg-slate-50'}>
-                    {row.map((cell, cIdx) => (
+                    {headerCells.map((_, cIdx) => (
                       <td key={cIdx} className="border border-slate-300 p-3 align-top leading-relaxed text-slate-800">
-                        {cell}
+                        {row[cIdx] || ''}
                       </td>
                     ))}
                     <td className="border border-slate-300 p-3 text-center align-middle font-bold text-slate-400">
@@ -147,9 +151,9 @@ export const RubricTableView: React.FC<RubricTableViewProps> = ({ rawText }) => 
       </div>
 
       {/* TEXT NACH DER TABELLE */}
-      {textAfterTable.length > 0 && (
+      {afterStr && (
         <div className="p-4 bg-white rounded-2xl border border-slate-200 shadow-soft">
-          <FormattedText content={textAfterTable.join('\n')} />
+          <FormattedText content={afterStr} />
         </div>
       )}
 

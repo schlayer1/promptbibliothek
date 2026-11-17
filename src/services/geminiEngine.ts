@@ -11,11 +11,28 @@ export const CANDIDATE_FLASH_MODELS = [
 
 let cachedWorkingModel: string | null = 'gemini-4-hydrogen';
 
+const DEFAULT_MAX_OUTPUT_TOKENS = 32768;
+
+function extractCandidateText(candidate: any): string {
+  const parts = Array.isArray(candidate?.content?.parts) ? candidate.content.parts : [];
+  return parts
+    .filter((p: any) => !p?.thought && typeof p?.text === 'string')
+    .map((p: any) => p.text)
+    .join('');
+}
+
 /**
  * Liefert die verifizierte Modellliste ohne zusätzlichen Vorab-API-Roundtrip.
  */
 export async function discoverAvailableGeminiModels(): Promise<string[]> {
   return CANDIDATE_FLASH_MODELS;
+}
+
+export interface GeminiCallResult {
+  text: string;
+  modelUsed: string;
+  finishReason?: string;
+  truncated?: boolean;
 }
 
 /**
@@ -28,13 +45,17 @@ export async function callGeminiApi({
   userPrompt,
   model,
   temperature = 0.4,
+  maxOutputTokens = DEFAULT_MAX_OUTPUT_TOKENS,
+  responseMimeType,
 }: {
   apiKey?: string;
   systemPrompt?: string;
   userPrompt: string;
   model?: string;
   temperature?: number;
-}): Promise<{ text: string; modelUsed: string }> {
+  maxOutputTokens?: number;
+  responseMimeType?: string;
+}): Promise<GeminiCallResult> {
   const customKey = apiKey?.trim() && apiKey.trim() !== 'serverless-proxy' ? apiKey.trim() : '';
   const requestedModel =
     model && model !== 'auto' ? model : cachedWorkingModel || 'auto';
@@ -50,6 +71,8 @@ export async function callGeminiApi({
         userPrompt,
         model: requestedModel,
         temperature,
+        maxOutputTokens,
+        responseMimeType,
       }),
     });
 
@@ -58,7 +81,12 @@ export async function callGeminiApi({
       if (data?.text) {
         const usedModel = data.model || CANDIDATE_FLASH_MODELS[0];
         cachedWorkingModel = usedModel;
-        return { text: data.text, modelUsed: usedModel };
+        return {
+          text: data.text,
+          modelUsed: usedModel,
+          finishReason: data.finishReason || 'STOP',
+          truncated: Boolean(data.truncated || data.finishReason === 'MAX_TOKENS'),
+        };
       }
     }
 
@@ -93,55 +121,81 @@ export async function callGeminiApi({
   }
 
   let lastError: any = null;
+  const budgetsToTry = maxOutputTokens > 8192 ? [maxOutputTokens, 8192] : [maxOutputTokens];
 
   for (const currentModel of candidateModels) {
     const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(currentModel)}:generateContent?key=${encodeURIComponent(customKey)}`;
 
-    try {
-      const response = await fetch(endpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [
-            {
-              role: 'user',
-              parts: [
-                {
-                  text: systemPrompt ? `${systemPrompt}\n\n${userPrompt}` : userPrompt,
-                },
-              ],
-            },
-          ],
-          generationConfig: {
-            temperature,
-            maxOutputTokens: 6000,
-          },
-        }),
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
-        if (text) {
-          cachedWorkingModel = currentModel;
-          return { text, modelUsed: currentModel };
+    for (const tokenBudget of budgetsToTry) {
+      try {
+        const generationConfig: Record<string, any> = {
+          temperature,
+          maxOutputTokens: tokenBudget,
+        };
+        if (responseMimeType === 'application/json') {
+          generationConfig.responseMimeType = 'application/json';
         }
-      }
 
-      const errJson = await response.json().catch(() => ({}));
-      const errMsg = errJson.error?.message || `HTTP ${response.status}`;
-      lastError = new Error(errMsg);
+        const response = await fetch(endpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [
+              {
+                role: 'user',
+                parts: [
+                  {
+                    text: systemPrompt ? `${systemPrompt}\n\n${userPrompt}` : userPrompt,
+                  },
+                ],
+              },
+            ],
+            generationConfig,
+          }),
+        });
 
-      if (
-        response.status === 400 &&
-        (errMsg.includes('API_KEY_INVALID') || errMsg.includes('key not valid'))
-      ) {
-        throw new Error('Der Gemini API-Schlüssel ist ungültig. Bitte prüfe den Schlüssel.');
-      }
-    } catch (err: any) {
-      lastError = err;
-      if (err?.message && err.message.includes('ungültig')) {
-        throw err;
+        if (response.ok) {
+          const data = await response.json();
+          const firstCandidate = data.candidates?.[0];
+          const text = extractCandidateText(firstCandidate);
+          const finishReason = firstCandidate?.finishReason || 'STOP';
+          if (text.trim().length > 0) {
+            cachedWorkingModel = currentModel;
+            return {
+              text,
+              modelUsed: currentModel,
+              finishReason,
+              truncated: finishReason === 'MAX_TOKENS',
+            };
+          }
+          break;
+        }
+
+        const errJson = await response.json().catch(() => ({}));
+        const errMsg = errJson.error?.message || `HTTP ${response.status}`;
+        lastError = new Error(errMsg);
+
+        if (
+          response.status === 400 &&
+          (errMsg.includes('API_KEY_INVALID') || errMsg.includes('key not valid'))
+        ) {
+          throw new Error('Der Gemini API-Schlüssel ist ungültig. Bitte prüfe den Schlüssel.');
+        }
+
+        if (
+          response.status === 400 &&
+          /max_output_tokens|maxOutputTokens|output token/i.test(errMsg) &&
+          tokenBudget > 8192
+        ) {
+          continue;
+        }
+        break;
+      } catch (err: any) {
+        lastError = err;
+        if (err?.message && err.message.includes('ungültig')) {
+          throw err;
+        }
+        break;
       }
     }
   }
@@ -185,10 +239,11 @@ Antworte STRIKT im folgenden JSON-Format ohne Markdown-Backticks:
     systemPrompt,
     userPrompt,
     temperature: 0.2,
+    responseMimeType: 'application/json',
   });
 
   try {
-    const cleaned = text.replace(/^```json/m, '').replace(/```$/m, '').trim();
+    const cleaned = text.replace(/^```json\s*/im, '').replace(/^```\s*/im, '').replace(/```\s*$/m, '').trim();
     return JSON.parse(cleaned);
   } catch {
     return {

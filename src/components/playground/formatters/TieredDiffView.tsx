@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Sliders, Sparkles, CheckSquare, Award } from 'lucide-react';
+import { Sliders, CheckSquare, Award, Key } from 'lucide-react';
 import { parseTieredDiff, TierBlock } from '../../../services/pedagogicalParser';
 import { FormattedText } from './FormattedText';
 
@@ -12,7 +12,7 @@ export const TieredDiffView: React.FC<TieredDiffViewProps> = ({
   rawText,
   showSolutions
 }) => {
-  const { intro, tiers, tasksOrSolution } = parseTieredDiff(rawText);
+  const { intro, tiers, tasksOrSolution, solutionSection } = parseTieredDiff(rawText);
   const [selectedTier, setSelectedTier] = useState<string>('all');
 
   const activeTiers = selectedTier === 'all' 
@@ -97,12 +97,12 @@ export const TieredDiffView: React.FC<TieredDiffViewProps> = ({
 
       {/* TIERED CONTAINERS */}
       <div className="space-y-6">
-        {activeTiers.map(tier => {
+        {activeTiers.map((tier, idx) => {
           const styles = getTierStyles(tier.color);
 
           return (
             <div
-              key={tier.tierName}
+              key={`${tier.tierName}-${idx}`}
               className={`rounded-3xl border-2 p-6 sm:p-8 shadow-soft print:shadow-none print-avoid-break relative ${styles.wrapper}`}
             >
               {/* TIER HEADER */}
@@ -139,6 +139,13 @@ export const TieredDiffView: React.FC<TieredDiffViewProps> = ({
         })}
       </div>
 
+      {/* FALLBACK FALLS KEINE STUFEN ERKANNT WURDEN */}
+      {tiers.length === 0 && !intro && (
+        <div className="bg-white rounded-3xl border-2 border-slate-200 p-6 sm:p-8 shadow-soft">
+          <FormattedText content={rawText} showWritingLines={true} />
+        </div>
+      )}
+
       {/* TASKS OR SOLUTIONS BLOCK */}
       {tasksOrSolution && (
         <div className="bg-white rounded-3xl border-2 border-slate-300 p-6 sm:p-8 shadow-soft print-avoid-break">
@@ -149,6 +156,19 @@ export const TieredDiffView: React.FC<TieredDiffViewProps> = ({
             </h3>
           </div>
           <FormattedText content={tasksOrSolution} showWritingLines={true} />
+        </div>
+      )}
+
+      {/* MUSTERLÖSUNG (NUR WENN AKTIV) */}
+      {solutionSection && showSolutions && (
+        <div className="bg-emerald-50/70 rounded-3xl border-2 border-emerald-400 p-6 sm:p-8 shadow-soft print-avoid-break">
+          <div className="flex items-center gap-2 border-b-2 border-emerald-300 pb-3 mb-4 text-emerald-950">
+            <Key className="w-5 h-5 text-emerald-700" />
+            <h3 className="font-black text-base">
+              Musterlösung & Erwartungshorizont (Lehrer-Exemplar)
+            </h3>
+          </div>
+          <FormattedText content={solutionSection} />
         </div>
       )}
 

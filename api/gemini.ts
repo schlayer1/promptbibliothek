@@ -13,7 +13,17 @@ const CANDIDATE_FLASH_MODELS = [
   'gemini-flash-latest',
 ];
 
-const REQUEST_TIMEOUT_MS = 45000;
+const REQUEST_TIMEOUT_MS = 55000;
+const DEFAULT_MAX_OUTPUT_TOKENS = 32768;
+const MAX_ALLOWED_OUTPUT_TOKENS = 65536;
+
+function extractCandidateText(candidate: any): string {
+  const parts = Array.isArray(candidate?.content?.parts) ? candidate.content.parts : [];
+  return parts
+    .filter((p: any) => !p?.thought && typeof p?.text === 'string')
+    .map((p: any) => p.text)
+    .join('');
+}
 
 function isOriginAllowed(urlStr: string, requestHost: string): boolean {
   try {
@@ -97,7 +107,7 @@ export default async function handler(req: any, res: any) {
       model,
       temperature = 0.4,
       responseMimeType,
-      maxOutputTokens = 6000,
+      maxOutputTokens = DEFAULT_MAX_OUTPUT_TOKENS,
     } = body;
 
     const clientKey =
@@ -131,67 +141,91 @@ export default async function handler(req: any, res: any) {
     const fullPrompt = systemPrompt ? `${systemPrompt}\n\n${userPrompt || ''}`.trim() : String(userPrompt);
     let lastErrorMessage = '';
 
+    const requestedMaxTokens =
+      typeof maxOutputTokens === 'number' && maxOutputTokens > 0
+        ? Math.min(Math.round(maxOutputTokens), MAX_ALLOWED_OUTPUT_TOKENS)
+        : DEFAULT_MAX_OUTPUT_TOKENS;
+
     for (const currentModel of candidateModels) {
       const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(currentModel)}:generateContent?key=${encodeURIComponent(activeKey)}`;
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+      const tokenBudgetsToTry = requestedMaxTokens > 8192 ? [requestedMaxTokens, 8192] : [requestedMaxTokens];
 
-      try {
-        const generationConfig: Record<string, any> = {
-          temperature: typeof temperature === 'number' ? temperature : 0.4,
-          maxOutputTokens: typeof maxOutputTokens === 'number' ? Math.min(maxOutputTokens, 8192) : 6000,
-        };
-        if (responseMimeType === 'application/json') {
-          generationConfig.responseMimeType = 'application/json';
-        }
+      for (const tokenBudget of tokenBudgetsToTry) {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
-        const response = await fetch(endpoint, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          signal: controller.signal,
-          body: JSON.stringify({
-            contents: [{ role: 'user', parts: [{ text: fullPrompt }] }],
-            generationConfig,
-          }),
-        });
-
-        clearTimeout(timeoutId);
-        const data: any = await response.json().catch(() => null);
-
-        if (response.ok && data) {
-          const firstCandidate = data.candidates?.[0];
-          const text = firstCandidate?.content?.parts?.[0]?.text;
-          if (typeof text === 'string' && text.trim().length > 0) {
-            return res.status(200).json({ text, model: currentModel });
+        try {
+          const generationConfig: Record<string, any> = {
+            temperature: typeof temperature === 'number' ? temperature : 0.4,
+            maxOutputTokens: tokenBudget,
+          };
+          if (responseMimeType === 'application/json') {
+            generationConfig.responseMimeType = 'application/json';
           }
 
-          const finishReason = firstCandidate?.finishReason;
-          const blockReason = data.promptFeedback?.blockReason;
-          if (finishReason && finishReason !== 'STOP') {
-            lastErrorMessage = `Modell ${currentModel} beendet mit Status "${finishReason}".`;
-          } else if (blockReason) {
-            lastErrorMessage = `Prompt wurde durch Sicherheitsfilter geblockt (${blockReason}).`;
-          } else {
-            lastErrorMessage = `Modell ${currentModel} lieferte eine leere Antwort.`;
+          const response = await fetch(endpoint, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            signal: controller.signal,
+            body: JSON.stringify({
+              contents: [{ role: 'user', parts: [{ text: fullPrompt }] }],
+              generationConfig,
+            }),
+          });
+
+          clearTimeout(timeoutId);
+          const data: any = await response.json().catch(() => null);
+
+          if (response.ok && data) {
+            const firstCandidate = data.candidates?.[0];
+            const text = extractCandidateText(firstCandidate);
+            const finishReason = firstCandidate?.finishReason || 'STOP';
+
+            if (text.trim().length > 0) {
+              return res.status(200).json({
+                text,
+                model: currentModel,
+                finishReason,
+                truncated: finishReason === 'MAX_TOKENS',
+              });
+            }
+
+            const blockReason = data.promptFeedback?.blockReason;
+            if (finishReason && finishReason !== 'STOP') {
+              lastErrorMessage = `Modell ${currentModel} beendet mit Status "${finishReason}".`;
+            } else if (blockReason) {
+              lastErrorMessage = `Prompt wurde durch Sicherheitsfilter geblockt (${blockReason}).`;
+            } else {
+              lastErrorMessage = `Modell ${currentModel} lieferte eine leere Antwort.`;
+            }
+            break;
           }
-          continue;
-        }
 
-        const errMsg = data?.error?.message || `HTTP ${response.status}`;
-        lastErrorMessage = errMsg;
+          const errMsg = data?.error?.message || `HTTP ${response.status}`;
+          lastErrorMessage = errMsg;
 
-        if (
-          response.status === 400 &&
-          (errMsg.includes('API_KEY_INVALID') || errMsg.includes('key not valid'))
-        ) {
-          return res.status(400).json({ error: 'Der Gemini API-Schlüssel ist ungültig. Bitte prüfe den Schlüssel.' });
+          if (
+            response.status === 400 &&
+            (errMsg.includes('API_KEY_INVALID') || errMsg.includes('key not valid'))
+          ) {
+            return res.status(400).json({ error: 'Der Gemini API-Schlüssel ist ungültig. Bitte prüfe den Schlüssel.' });
+          }
+
+          const isMaxTokensError =
+            response.status === 400 &&
+            /max_output_tokens|maxOutputTokens|output token/i.test(errMsg);
+          if (isMaxTokensError && tokenBudget > 8192) {
+            continue;
+          }
+          break;
+        } catch (err: any) {
+          clearTimeout(timeoutId);
+          lastErrorMessage =
+            err?.name === 'AbortError'
+              ? `Zeitüberschreitung nach ${REQUEST_TIMEOUT_MS / 1000}s bei Modell ${currentModel}`
+              : err?.message || String(err);
+          break;
         }
-      } catch (err: any) {
-        clearTimeout(timeoutId);
-        lastErrorMessage =
-          err?.name === 'AbortError'
-            ? `Zeitüberschreitung nach ${REQUEST_TIMEOUT_MS / 1000}s bei Modell ${currentModel}`
-            : err?.message || String(err);
       }
     }
 

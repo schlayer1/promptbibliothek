@@ -1,5 +1,6 @@
 import React from 'react';
-import { FileText, CheckSquare, Key, BookOpen } from 'lucide-react';
+import { Key } from 'lucide-react';
+import { splitSolutionsSection } from '../../../services/pedagogicalParser';
 import { FormattedText } from './FormattedText';
 
 interface WorksheetViewProps {
@@ -13,10 +14,7 @@ export const WorksheetView: React.FC<WorksheetViewProps> = ({
   showSolutions,
   topicTitle
 }) => {
-  // Split potential solution part
-  const solutionMatch = rawText.split(/(?:###\s*Lösungen|##\s*Musterlösung|Musterlösungen:|Lösungsbogen:)/i);
-  const exercisePart = solutionMatch[0];
-  const solutionPart = solutionMatch.length > 1 ? solutionMatch.slice(1).join('\n') : '';
+  const { mainContent: exercisePart, solutionContent: solutionPart } = splitSolutionsSection(rawText);
 
   return (
     <div className="space-y-6">
